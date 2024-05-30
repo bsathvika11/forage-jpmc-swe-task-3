@@ -1,0 +1,231 @@
+From ed2047f865d2532289d60f4658921b2c1581ed67 Mon Sep 17 00:00:00 2001
+From: Sathvika <sathvikabandra11@gmail.com>
+Date: Thu, 30 May 2024 18:26:23 +0530
+Subject: [PATCH] Committed changes in
+ DataManipulator.ts,Graph.tsx,package.json
+
+---
+ package-lock.json      | 48895 ++++++++++++++++-----------------------
+ package.json           |    30 +-
+ src/DataManipulator.ts |    57 +-
+ src/Graph.tsx          |    63 +-
+ 4 files changed, 19735 insertions(+), 29310 deletions(-)
+
+diff --git a/package.json b/package.json
+index 8ca3a60..d205218 100644
+--- a/package.json
++++ b/package.json
+@@ -3,19 +3,19 @@
+   "version": "0.1.0",
+   "private": true,
+   "dependencies": {
+-    "@finos/perspective": "^1.6.2",
+-    "@finos/perspective-viewer": "^1.6.2",
+-    "@finos/perspective-viewer-d3fc": "^1.6.2",
+-    "@finos/perspective-viewer-datagrid": "^1.6.2",
+-    "@types/jest": "^23.3.13",
+-    "@types/node": "^10.12.19",
+-    "@types/react": "^16.9.0",
+-    "@types/react-dom": "^16.0.11",
+-    "bootstrap": "^4.2.1",
+-    "puppeteer": "^1.19.0",
+-    "react": "^16.9.0",
+-    "react-dom": "^16.9.0",
+-    "react-scripts": "2.1.3"
++    "@finos/perspective": "^2.10.1",
++    "@finos/perspective-viewer": "^2.10.1",
++    "@finos/perspective-viewer-d3fc": "^2.10.1",
++    "@finos/perspective-viewer-datagrid": "^2.10.1",
++    "@types/jest": "^29.5.12",
++    "@types/node": "^20.12.13",
++    "@types/react": "^18.3.3",
++    "@types/react-dom": "^18.3.0",
++    "bootstrap": "^5.3.3",
++    "puppeteer": "^22.10.0",
++    "react": "^18.3.1",
++    "react-dom": "^18.3.1",
++    "react-scripts": "^5.0.1"
+   },
+   "scripts": {
+     "start": "react-scripts --openssl-legacy-provider start",
+@@ -34,7 +34,7 @@
+   ],
+   "devDependencies": {
+     "awesome-typescript-loader": "^5.2.1",
+-    "source-map-loader": "^0.2.4",
+-    "typescript": "^3.2.4"
++    "source-map-loader": "^5.0.0",
++    "typescript": "^5.4.5"
+   }
+ }
+diff --git a/src/DataManipulator.ts b/src/DataManipulator.ts
+index 7f62295..22fdc2e 100644
+--- a/src/DataManipulator.ts
++++ b/src/DataManipulator.ts
+@@ -1,20 +1,51 @@
+-import { ServerRespond } from './DataStreamer';
++import { ServerRespond } from "./DataStreamer";
+
+ export interface Row {
+-  stock: string,
+-  top_ask_price: number,
+-  timestamp: Date,
++  price_abc: Number;
++  price_def: Number;
++  ratio: Number;
++  timestamp: Date;
++  upper_bound: Number;
++  lower_bound: Number;
++  trigger_alert: Number | undefined;
+ }
+
+-
+ export class DataManipulator {
+-  static generateRow(serverResponds: ServerRespond[]) {
+-    return serverResponds.map((el: any) => {
+-      return {
+-        stock: el.stock,
+-        top_ask_price: el.top_ask && el.top_ask.price || 0,
+-        timestamp: el.timestamp,
+-      };
+-    })
++  static generateRow(
++    serverRespond: ServerRespond[]
++    //historicalData: HistoricalData[]
++  ): Row {
++    //const averageRatio = calculateAverageRatio(historicalData);
++    const upperBound = 1 + 0.05;
++    const lowerBound = 1 - 0.05;
++    const priceABC =
++      (serverRespond[0].top_ask.price + serverRespond[0].top_bid.price) / 2;
++    const priceDEF =
++      (serverRespond[1].top_ask.price + serverRespond[1].top_bid.price) / 2;
++    const ratio = priceABC / priceDEF;
++    const triggerAlert =
++      ratio > upperBound || ratio < lowerBound ? ratio : undefined;
++    const latestTimestamp =
++      serverRespond[0].timestamp > serverRespond[1].timestamp
++        ? serverRespond[0].timestamp
++        : serverRespond[1].timestamp;
++
++    return {
++      price_abc: priceABC,
++      price_def: priceDEF,
++      ratio,
++      timestamp: latestTimestamp,
++      upper_bound: upperBound,
++      lower_bound: lowerBound,
++      trigger_alert: triggerAlert,
++    };
+   }
+ }
++/*function calculateAverageRatio(historicalData: HistoricalData[]): number {
++  let sumRatio = 0;
++  for (const data of historicalData) {
++    sumRatio += data.priceABC / data.priceDEF;
++  }
++  const averageRatio = sumRatio / historicalData.length;
++  return averageRatio;
++}*/
+diff --git a/src/Graph.tsx b/src/Graph.tsx
+index 277797d..847415b 100644
+--- a/src/Graph.tsx
++++ b/src/Graph.tsx
+@@ -1,32 +1,37 @@
+-import React, { Component } from 'react';
+-import { Table } from '@finos/perspective';
+-import { ServerRespond } from './DataStreamer';
+-import { DataManipulator } from './DataManipulator';
+-import './Graph.css';
++import React, { Component } from "react";
++import { Table, TableData } from "@finos/perspective";
++import { ServerRespond } from "./DataStreamer";
++import { DataManipulator } from "./DataManipulator";
++import "./Graph.css";
+
+ interface IProps {
+-  data: ServerRespond[],
++  data: ServerRespond[];
+ }
+
+ interface PerspectiveViewerElement extends HTMLElement {
+-  load: (table: Table) => void,
++  load: (table: Table) => void;
+ }
+ class Graph extends Component<IProps, {}> {
+   table: Table | undefined;
+
+   render() {
+-    return React.createElement('perspective-viewer');
++    return React.createElement("perspective-viewer");
+   }
+
+   componentDidMount() {
+     // Get element from the DOM.
+-    const elem = document.getElementsByTagName('perspective-viewer')[0] as unknown as PerspectiveViewerElement;
++    const elem = document.getElementsByTagName(
++      "perspective-viewer"
++    )[0] as unknown as PerspectiveViewerElement;
+
+     const schema = {
+-      stock: 'string',
+-      top_ask_price: 'float',
+-      top_bid_price: 'float',
+-      timestamp: 'date',
++      price_abc: "float",
++      price_def: "float",
++      ratio: "float",
++      timestamp: "date",
++      upper_bound: "float",
++      lower_bound: "float",
++      trigger_alert: "float",
+     };
+
+     if (window.perspective && window.perspective.worker()) {
+@@ -35,24 +40,32 @@ class Graph extends Component<IProps, {}> {
+     if (this.table) {
+       // Load the `table` in the `<perspective-viewer>` DOM reference.
+       elem.load(this.table);
+-      elem.setAttribute('view', 'y_line');
+-      elem.setAttribute('column-pivots', '["stock"]');
+-      elem.setAttribute('row-pivots', '["timestamp"]');
+-      elem.setAttribute('columns', '["top_ask_price"]');
+-      elem.setAttribute('aggregates', JSON.stringify({
+-        stock: 'distinctcount',
+-        top_ask_price: 'avg',
+-        top_bid_price: 'avg',
+-        timestamp: 'distinct count',
+-      }));
++      elem.setAttribute("view", "y_line");
++      elem.setAttribute("row-pivots", '["timestamp"]');
++      elem.setAttribute(
++        "columns",
++        '["ratio","lower_bound","upper_bound","trigger_alert"]'
++      );
++      elem.setAttribute(
++        "aggregates",
++        JSON.stringify({
++          price_abc: "avg",
++          price_def: "avg",
++          ratio: "avg",
++          timestamp: "distinct count",
++          upper_bound: "avg",
++          lower_bound: "avg",
++          trigger_alert: "avg",
++        })
++      );
+     }
+   }
+
+   componentDidUpdate() {
+     if (this.table) {
+-      this.table.update(
++      this.table.update([
+         DataManipulator.generateRow(this.props.data),
+-      );
++      ] as unknown as TableData);
+     }
+   }
+ }
+--
+2.45.1.windows.1
